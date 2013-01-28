@@ -8,31 +8,41 @@ Usage
 
 Showing now playing information:
 ```
-[09:53:33] $np
-[09:53:34] KRF listened to “Behind Closed Doors” by Rise Against [The Sufferer & The Witness] more than 1 days ago
+05:33:14 lembas-nyan │ np
+05:33:17     samwise │ tacticalbread listened to "Untitled" by dälek about 2 hours ago. 1 plays by tacticalbread, 1043 plays by 492 listeners. (Hip-Hop, experimental, noise)
 ```
 
 Showing profile information:
 ```
-[09:53:36] $profile
-[09:53:37] KRF (realname: Kevin Funk) registered on May 28, 2006; 23 years old / m; Country: Germany; Tracks played: 32870
+05:34:20 lembas-nyan │ ~profile
+05:34:21     samwise │ tacticalbread (realname: Shad) registered on Oct 28, 2008; age: 23 / m; Country: United States; Tracks played: 68542
 ```
 
 Showing recent tracks:
 ```
-[10:29:16] $lastfm recenttracks
-[10:29:17] KRF’s recenttracks: Zebrahead – The Set-Up, Good Charlotte – Girls & Boys, The All-American Rejects – Another Heart Calls, Angels & Airwaves – Do It For Me Now, Bowling For Soup – The Bitch Song, Yellowcard – Down On My Head, Sum 41 – Confusion And Frustration In Modern Times, Sum 41 – With Me, Goldfinger – Bro, The Offspring – Americana (with a total number of 11 entries)
+05:35:23 lembas-nyan │ ~lastfm recenttracks
+05:35:24     samwise │ tacticalbread's recenttracks: dälek – Untitled, dälek – Atypical Stereotype, dälek – 2012 (The Pillage), dälek – Gutter Tactics, dälek – We Lost Sight (with a total number of 11 entries)
 ```
 
 Showing help:
 ```
-[10:28:29] $help lastfm
-[10:28:29] (lastfm method [id]) — Lists LastFM info where method is in [friends, neighbours, profile, recenttracks, tags, topalbums, topartists, toptracks]. Set your LastFM ID with the set method (default is your current nick) or specify id to switch for one call.
+05:35:48 lembas-nyan │ ~help lastfm
+05:35:53     samwise │ (lastfm <method> [<id>]) -- Lists LastFM info where <method> is in [friends, neighbours, profile, recenttracks, tags, topalbums, topartists, toptracks]. Set your LastFM ID with the set method (default is your current nick) or specify <id> to switch for one call.
+```
+
+Searching artists:
+```
+05:36:58 lembas-nyan │ ~lastfm search M83
+05:37:00     samwise │ M83 [ 2001 - Present, Antibes, France ] ( electronic, shoegaze, post-rock ) 2940 plays by tacticalbread, 50479098 plays by 1260956 listeners. http://www.last.fm/music/M83
+```
+
+Comparing two users:
+```
+05:38:09 lembas-nyan │ ~compare suzuki-nyan
+05:38:10     samwise │ gurosebe and tacticalbread have 98.0% music compatibility! Artists they share include: Matryoshka, Cloudkicker, Nujabes, YUI, きゃりーぱみゅぱみゅ
 ```
 
 Development
 -----------
-
-Feel free to suggest enhancements, I'm happy to receive code contributions
 
 The files `__init__.py` and `plugin.py` provide some documentation.
