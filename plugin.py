@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 ###
 # Copyright (c) 2006, Ilya Kuznetsov
-# Copyright (c) 2008,2012 Kevin Funk
+# Copyright (c) 2008, Kevin Funk
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,55 +29,28 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 ###
-
+import sys
 import supybot.utils as utils
 from supybot.commands import *
 import supybot.conf as conf
 import supybot.plugins as plugins
 import supybot.ircutils as ircutils
+import supybot.ircmsgs as ircmsgs
 import supybot.callbacks as callbacks
 import supybot.world as world
-import supybot.log as log
 
 import urllib2
+#from urllib import quote_plus
 from xml.dom import minidom
+import urllib
 from time import time
 
 from LastFMDB import *
 
-class LastFMParser:
-
-    def parseRecentTracks(self, stream):
-        """
-        @return Tuple with track information of last track
-        """
-
-        xml = minidom.parse(stream).getElementsByTagName("recenttracks")[0]
-        user = xml.getAttribute("user")
-
-        t = xml.getElementsByTagName("track")[0] # most recent track
-        isNowPlaying = (t.getAttribute("nowplaying") == "true")
-        if not isNowPlaying:
-            time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
-        else:
-            time = None
-
-        artist = t.getElementsByTagName("artist")[0].firstChild.data
-        track = t.getElementsByTagName("name")[0].firstChild.data
-        try:
-            albumNode = t.getElementsByTagName("album")[0].firstChild
-            album = albumNode.data
-        except (IndexError, AttributeError):
-            album = None
-        return (user, isNowPlaying, artist, track, album, time)
-
 class LastFM(callbacks.Plugin):
-    # 1.0 API (deprecated)
-    APIURL_1_0 = "http://ws.audioscrobbler.com/1.0/user"
-
-    # 2.0 API (see http://www.lastfm.de/api/intro)
-    APIKEY = "b7638a70725eea60737f9ad9f56f3099"
-    APIURL_2_0 = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
+    BASEURL = "http://ws.audioscrobbler.com/1.0/user"
+    APIKEY = "7f11b8c4505415d7b9059339b47812d5" # FIXME: Get own key
+    APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
 
     def __init__(self, irc):
         self.__parent = super(LastFM, self)
@@ -105,9 +79,8 @@ class LastFM(callbacks.Plugin):
         maxResults = self.registryValue("maxResults", channel)
         method = method.lower()
 
-        url = "%s/%s/%s.txt" % (self.APIURL_1_0, id, method)
         try:
-            f = urllib2.urlopen(url)
+            f = urllib2.urlopen("%s/%s/%s.txt" % (self.BASEURL, id, method))
         except urllib2.HTTPError:
             irc.error("Unknown ID (%s) or unknown method (%s)"
                     % (msg.nick, method))
@@ -123,38 +96,149 @@ class LastFM(callbacks.Plugin):
 
     lastfm = wrap(lastfm, ["something", optional("something")])
 
-    def nowPlaying(self, irc, msg, args, optionalId):
+    def np(self, irc, msg, args, optionalId):
         """[<id>]
 
         Announces the now playing track of the specified LastFM ID.
         Set your LastFM ID with the set method (default is your current nick)
         or specify <id> to switch for one call.
         """
+        #channel = msg.args[0]
+        #verbose = self.registryValue("npverbose", channel)
 
         id = (optionalId or self.db.getId(msg.nick) or msg.nick)
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours", channel)
+        trackInfo = self.registryValue("showTrackInfo", channel)
+        showTags = self.registryValue("showTags", channel)
 
-        # see http://www.lastfm.de/api/show/user.getrecenttracks
-        url = "%s&method=user.getrecenttracks&user=%s" % (self.APIURL_2_0, id)
         try:
-            f = urllib2.urlopen(url)
+            f = urllib2.urlopen("%s&method=user.getrecenttracks&user=%s"
+                    % (self.APIURL, id))
         except urllib2.HTTPError:
             irc.error("Unknown ID (%s)" % id)
             return
 
-        parser = LastFMParser()
-        (user, isNowPlaying, artist, track, album, time) = parser.parseRecentTracks(f)
-        if isNowPlaying:
-            albumStr = "[" + album + "]" if album else ""
-            irc.reply(('%s is listening to "%s" by %s %s'
-                    % (user, track, artist, )).encode("utf8"))
+        xml = minidom.parse(f).getElementsByTagName("recenttracks")[0]
+        user = xml.getAttribute("user")
+        try:
+            t = xml.getElementsByTagName("track")[0] # most recent track
+        except:
+            irc.error("No tracks or something for %s lol" % id)
+            return
+        isNowplaying = (t.getAttribute("nowplaying") == "true")
+        artist = t.getElementsByTagName("artist")[0].firstChild.data
+        track = t.getElementsByTagName("name")[0].firstChild.data
+        try:
+            album = urllib.quote_plus(" ["+t.getElementsByTagName("album")[0].getElementsByTagName("title")[0].firstChild.data+"]")
+        except:
+            album = ""
+
+        artist2 = urllib.quote_plus(artist.encode("utf8"))
+        track2 = urllib.quote_plus(track.encode("utf8"))
+
+        # Play count and shit
+        try:
+            herp = urllib2.urlopen("%s&method=track.getInfo&username=%s&artist=%s&track=%s"
+                    % (self.APIURL, id, artist2, track2))
+            playinfo = minidom.parse(herp).getElementsByTagName("track")[0]
+            playcount = playinfo.getElementsByTagName("playcount")[0].firstChild.data
+            listenercount = playinfo.getElementsByTagName("listeners")[0].firstChild.data
+            userloved = playinfo.getElementsByTagName("userloved")[0].firstChild.data
+        except:
+            #irc.error("You broke something! Unable to get track info for \"%s - %s\" or %s is an Unknown ID" % (artist, track, id))
+            #sys.stderr.write("%s&method=track.getInfo&username=%s&artist=%s&track=%s" % (self.APIURL, id, artist2, track2))
+            #irc.reply(('%s is listening to "%s" by %s%s.'
+                    #% (user, track, artist, album)).encode("utf8"))
+            #return
+            trackInfo = False
+
+        try:
+            userplaycount = playinfo.getElementsByTagName("userplaycount")[0].firstChild.data
+        except:
+            userplaycount = 0
+
+        # Tags n shit
+        tags = ""
+        try:
+            tags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
+        except:
+            #sys.stderr.write("%s&artist.getTopTags&artist=%s" % (self.APIURL,artist2))
+            showTags = False
+
+        isTagged = True
+        try:
+            toptags = minidom.parse(tags).getElementsByTagName("toptags")[0]
+            tag1 = toptags.getElementsByTagName("tag")[0].getElementsByTagName("name")[0].firstChild.data
+            tag2 = toptags.getElementsByTagName("tag")[1].getElementsByTagName("name")[0].firstChild.data
+            tag3 = toptags.getElementsByTagName("tag")[2].getElementsByTagName("name")[0].firstChild.data
+        except:
+            isTagged = False
+
+        if showColours:
+            if isNowplaying:
+                output = ('\x038%s\x03 is listening to "\x0310%s\x03" by \x0312%s\x0313%s\x03' % (user, track, artist, album)).encode("utf8")
+            else:
+                time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
+                output = ('\x038%s\x03 listened to "\x0310%s\x03" by \x0312%s\x0313%s\x03 about \x0315%s\x03' % (user, track, artist, album, self._formatTimeago(time))).encode("utf8")
+            if trackInfo == True:
+                if userloved == "1":
+                    output += (' \x035%s\x03. %s plays by \x038%s\x03, %s plays by %s listeners.' % (u'♥', userplaycount, user, playcount, listenercount)).encode("utf8")
+                else:
+                    output += ('. %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
+            if showTags == True:
+                if isTagged == True:
+                    output += (' (\x037%s\x03, \x037%s\x03, \x037%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
+                else:
+                    output += (' (\x037%s\x03)' % ("no tags")).encode("utf8")
         else:
-            irc.reply(('%s listened to "%s" by %s %s more than %s'
-                    % (user, track, artist, album,
-                        self._formatTimeago(time))).encode("utf-8"))
+            if isNowplaying:
+                output = ('%s is listening to "%s" by %s%s' % (user, track, artist, album)).encode("utf8")
+            else:
+                time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
+                output = ('%s listened to "%s" by %s%s about %s' % (user, track, artist, album, self._formatTimeago(time))).encode("utf8")
+            if trackInfo == True:
+                if userloved == "1":
+                    output += (' %s. %s plays by %s, %s plays by %s listeners.' % (u'♥', userplaycount, user, playcount, listenercount)).encode("utf8")
+                else:
+                    output += ('. %s plays by %s, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
+            if showTags == True:
+                if isTagged == True:
+                    output += (' (%s, %s, %s)' % (tag1, tag2, tag3)).encode("utf8")
+                else:
+                    output += (' (%s)' % ("no tags")).encode("utf8")
 
-    np = wrap(nowPlaying, [optional("something")])
+        irc.reply(output)
 
-    def setUserId(self, irc, msg, args, newId):
+        #if isNowplaying:
+            #if trackInfo == True:
+                #if userloved == "1":
+                    #irc.reply(('%s is listening to "%s" by %s%s %s. %s plays by %s, %s plays by %s listeners.'
+                            #% (user, track, artist, album, u'♥', userplaycount, user, playcount, listenercount)).encode("utf8"))
+                #else:
+                    #irc.reply(('%s is listening to "%s" by %s%s. %s plays by %s, %s plays by %s listeners.'
+                            #% (user, track, artist, album, userplaycount, user, playcount, listenercount)).encode("utf8"))
+            #else:
+                #irc.reply(('%s is listening to "%s" by %s%s.'
+                    #% (user, track, artist, album)).encode("utf8"))
+        #else:
+            #if trackInfo == True:
+                #if userloved == "1":
+                    #time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
+                    #irc.reply(('%s listened to "%s" by %s%s %s about %s. %s plays by %s, %s plays by %s listeners.'
+                            #% (user, track, artist, album, u'♥',
+                                #self._formatTimeago(time), userplaycount, user, playcount, listenercount )).encode("utf-8"))
+                #else:
+                    #time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
+                    #irc.reply(('%s listened to "%s" by %s%s about %s. %s plays by %s, %s plays by %s listeners.'
+                            #% (user, track, artist, album,
+                                #self._formatTimeago(time), userplaycount, user, playcount, listenercount )).encode("utf-8"))
+            #else:
+                #irc.reply(('%s listened to "%s" by %s%s %s about %s.'
+                        #% (user, track, artist, album, self._formatTimeago(time))).encode("utf-8"))
+    np = wrap(np, [optional("something")])
+
+    def set(self, irc, msg, args, newId):
         """<id>
 
         Sets the LastFM ID for the caller and saves it in a database.
@@ -165,7 +249,7 @@ class LastFM(callbacks.Plugin):
         irc.reply("LastFM ID changed.")
         self.profile(irc, msg, args)
 
-    set = wrap(setUserId, ["something"])
+    set = wrap(set, ["something"])
 
     def profile(self, irc, msg, args, optionalId):
         """[<id>]
@@ -177,9 +261,8 @@ class LastFM(callbacks.Plugin):
 
         id = (optionalId or self.db.getId(msg.nick) or msg.nick)
 
-        url = "%s/%s/profile.xml" % (self.APIURL_1_0, id)
         try:
-            f = urllib2.urlopen(url)
+            f = urllib2.urlopen("%s/%s/profile.xml" % (self.BASEURL, id))
         except urllib2.HTTPError:
             irc.error("Unknown user (%s)" % id)
             return
@@ -193,44 +276,117 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
     profile = wrap(profile, [optional("something")])
 
-    def compareUsers(self, irc, msg, args, user1, optionalUser2):
-        """user1 [<user2>]
+    def compare(self, irc, msg, args, id1, optionalId):
+        """<id1> [<optionalId>]
 
-        Compares the taste from two users
-        If <user2> is ommitted, the taste is compared against the ID of the calling user.
+        Compare <id1>'s taste with <optionalId>'s or your current LastFM ID's taste.
         """
 
-        user2 = (optionalUser2 or self.db.getId(msg.nick) or msg.nick)
+        id2 = (self.db.getId(optionalId) or optionalId or self.db.getId(msg.nick) or msg.nick)
+        id1 = (self.db.getId(id1) or id1)
 
-        channel = msg.args[0]
-        maxResults = self.registryValue("maxResults", channel)
-        # see http://www.lastfm.de/api/show/tasteometer.compare
-        url = "%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s&limit=%s" % (
-            self.APIURL_2_0, user1, user2, maxResults
-        )
         try:
-            f = urllib2.urlopen(url)
-        except urllib2.HTTPError, e:
-            irc.error("Failure: %s" % (e))
+            f = urllib2.urlopen("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
+        except urllib2.HTTPError:
+            irc.error("Unknown ID (%s or %s)" % (id1, id2))
+            #self.info.log("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
+            #sys.stderr.write("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
             return
 
-        xml = minidom.parse(f)
-        resultNode = xml.getElementsByTagName("result")[0]
-        score = float(self._parse(resultNode, "score"))
-        scoreStr = "%s (%s)" % (round(score, 2), self._formatRating(score))
-        # Note: XPath would be really cool here...
-        artists = [el for el in resultNode.getElementsByTagName("artist")]
-        artistNames = [el.getElementsByTagName("name")[0].firstChild.data for el in artists]
-        irc.reply(("Result of comparison between %s and %s: score: %s, common artists: %s" \
-                % (user1, user2, scoreStr, ", ".join(artistNames))
-            ).encode("utf-8")
-        )
+        xml = minidom.parse(f).getElementsByTagName("comparison")[0]
+        score = float(xml.getElementsByTagName("score")[0].firstChild.data)
+        artists = xml.getElementsByTagName("artist")
+        artist_names = [artist.getElementsByTagName("name")[0].firstChild.data
+                       for artist in artists]
 
-    compare = wrap(compareUsers, ["something", optional("something")])
+        irc.reply(('%s and %s have %.1f%% music compatibility! Artists they share include: %s'
+                  % (id1, id2, score*100, ", ".join(artist_names))).encode("utf8"))
+    
+    compare = wrap(compare, ["something", optional("something")])
 
-    def _parse(self, node, tagName, exceptMsg="not specified"):
+    def search(self, irc, msg, args, query):
+        """<query>
+
+        Searches last.fm for artist <query>.
+        """
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours", channel)
+        artist = urllib.quote_plus(query)
+        isTagged = True
+        placeAndDates = True
+        userPlayed = True
+
+        try:
+            f = urllib2.urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
+                    % (self.APIURL, artist, id))
+        except urllib2.HTTPError:
+            irc.error("Unknown artist %s or something lol" % artist)
+            return
+        
+        xml = minidom.parse(f).getElementsByTagName("artist")[0]
+        try:
+            name = xml.getElementsByTagName("name")[0].firstChild.data
+            url = xml.getElementsByTagName("url")[0].firstChild.data
+            listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
+            playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
+            bio = xml.getElementsByTagName("bio")[0]
+            summary = bio.getElementsByTagName("summary")[0].firstChild.data
+        except:
+            irc.error("Can't find artist %s! :O" % artist)
+            return
+
+        try:
+            userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
+        except:
+            userPlayed = False
+
+        try:
+            placeformed = bio.getElementsByTagName("placeformed")[0].firstChild.data
+            formationlist = bio.getElementsByTagName("formationlist")[0].getElementsByTagName("formation")[0]
+            yearfrom = bio.getElementsByTagName("yearformed")[0].firstChild.data
             try:
-                return node.getElementsByTagName(tagName)[0].firstChild.data
+                yearto = formationlist.getElementsByTagName("yearto")[0].firstChild.data
+            except:
+                yearto = "Present"
+        except:
+            placeAndDates = False
+
+        try:
+            toptags = xml.getElementsByTagName("tags")[0]
+            tag1 = toptags.getElementsByTagName("tag")[0].getElementsByTagName("name")[0].firstChild.data
+            tag2 = toptags.getElementsByTagName("tag")[1].getElementsByTagName("name")[0].firstChild.data
+            tag3 = toptags.getElementsByTagName("tag")[2].getElementsByTagName("name")[0].firstChild.data
+        except:
+            isTagged = False
+
+        if showColours:
+            output = ("\x0312%s\x03" % name)
+            if placeAndDates:
+                output += (" [\x035 %s\x03 -\x035 %s\x03, \x038%s\x03 ]" % (yearfrom, yearto, placeformed))
+            if isTagged:
+                output += (" (\x037 %s\x03,\x037 %s\x03,\x037 %s\x03 )" % (tag1,tag2,tag3))
+            if userPlayed:
+                output += (' %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
+            output += (" %s" % url)
+        else:
+            output = ("%s" % name)
+            if placeAndDates:
+                output += (" [ %s - %s, %s ]" % (yearfrom, yearto, placeformed))
+            if isTagged:
+                output += (" ( %s, %s, %s )" % (tag1,tag2,tag3))
+            if userPlayed:
+                output += (' %s plays by %s, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
+            output += (" %s" % url)
+
+        irc.reply(output)
+
+    search = wrap(search, ['text'])
+
+    def _parse(self, data, node, exceptMsg="not specified"):
+            try:
+                return data.getElementsByTagName(node)[0].firstChild.data
             except IndexError:
                 return exceptMsg
 
@@ -244,25 +400,6 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             return "%i minutes ago" % (t/60)
         if t > 0:
             return "%i seconds ago" % (t)
-
-    def _formatRating(self, score):
-        """Format rating
-
-        @param score Value in the form of [0:1] (float)
-        """
-
-        if score >= 0.9:
-            return "Super"
-        elif score >= 0.7:
-            return "Very High"
-        elif score >= 0.5:
-            return "High"
-        elif score >= 0.3:
-            return "Medium"
-        elif score >= 0.1:
-            return "Low"
-        else:
-            return "Very Low"
 
 dbfilename = conf.supybot.directories.data.dirize("LastFM.db")
 

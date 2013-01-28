@@ -1,5 +1,5 @@
 ###
-# Copyright (c) 2008,2012 Kevin Funk
+# Copyright (c) 2008, Kevin Funk
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,12 +28,7 @@
 
 ###
 
-#from __future__ import print_function
-
 from supybot.test import *
-from plugin import LastFMParser
-
-from StringIO import StringIO
 
 class LastFMTestCase(PluginTestCase):
     plugins = ('LastFM',)
@@ -41,64 +36,11 @@ class LastFMTestCase(PluginTestCase):
     def testLastfm(self):
         print self.assertNotError("lastfm recenttracks")
         print self.assertError("lastfm TESTEXCEPTION")
+        print self.assertNotError("lastfm profile czshadow")
         print self.assertNotError("lastfm recenttracks czshadow")
         print self.assertNotError("lastfm np krf")
-
-    def testLastfmDB(self):
+        print self.assertNotError("lastfm profile test")
         print self.assertNotError("lastfm set nick") # test db
         print self.assertNotError("lastfm set test") # test db unset
-
-    def testLastfmProfile(self):
-        print self.assertNotError("lastfm profile czshadow")
-        print self.assertNotError("lastfm profile test")
-
-    def testLastfmCompare(self):
-        print self.assertNotError("lastfm compare krf czshadow")
-        print self.assertNotError("lastfm compare krf")
-
-    def testLastFMParseRecentTracks(self):
-        """Parser tests"""
-
-        # noalbum, nowplaying
-        data1 = """<recenttracks user="USER" page="1" perPage="10" totalPages="3019">
-  <track nowplaying="true">
-    <artist mbid="2f9ecbed-27be-40e6-abca-6de49d50299e">ARTIST</artist>
-    <name>TRACK</name>
-    <mbid/>
-    <album mbid=""/>
-    <url>www.last.fm/music/Aretha+Franklin/_/Sisters+Are+Doing+It+For+Themselves</url>
-    <date uts="1213031819">9 Jun 2008, 17:16</date>
-    <streamable>1</streamable>
-  </track>
-</recenttracks>"""
-
-        # album, not nowplaying
-        data2 = """<recenttracks user="USER" page="1" perPage="10" totalPages="3019">
-  <track nowplaying="false">
-    <artist mbid="2f9ecbed-27be-40e6-abca-6de49d50299e">ARTIST</artist>
-    <name>TRACK</name>
-    <mbid/>
-    <album mbid="">ALBUM</album>
-    <url>www.last.fm/music/Aretha+Franklin/_/Sisters+Are+Doing+It+For+Themselves</url>
-    <date uts="1213031819">9 Jun 2008, 17:16</date>
-    <streamable>1</streamable>
-  </track>
-</recenttracks>"""
-
-        parser = LastFMParser()
-        (user, isNowPlaying, artist, track, album, time) = \
-            parser.parseRecentTracks(StringIO(data1))
-        self.assertEqual(user, "USER")
-        self.assertEqual(isNowPlaying, True)
-        self.assertEqual(artist, "ARTIST")
-        self.assertEqual(track, "TRACK")
-        self.assertEqual(album, None)
-        self.assertEqual(time, None)
-
-        (user, isNowPlaying, artist, track, album, time) = \
-            parser.parseRecentTracks(StringIO(data2))
-        self.assertEqual(album, "ALBUM")
-        self.assertEqual(time, 1213031819)
-
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

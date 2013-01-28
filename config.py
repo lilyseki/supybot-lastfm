@@ -48,4 +48,12 @@ conf.registerChannelValue(LastFM, "maxResults",
     registry.NonNegativeInteger(5, """Limits the number of results that will be
         displayed in the channel."""))
 
+conf.registerChannelValue(LastFM, 'showColours', 
+        registry.Boolean(True, """Determins whether colours are shown in np."""))
+
+conf.registerChannelValue(LastFM, 'showtrackInfo', 
+        registry.Boolean(True, """Determins whether listener count is shown in np."""))
+
+conf.registerChannelValue(LastFM, 'showTags', 
+        registry.Boolean(True, """Determins whether artist tags are shown in np."""))
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:
