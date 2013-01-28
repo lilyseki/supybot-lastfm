@@ -188,7 +188,7 @@ class LastFM(callbacks.Plugin):
                     output += ('. %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
             if showTags == True:
                 if isTagged == True:
-                    output += (' (\x037%s\x03, \x037%s\x03, \x037%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
+                    output += (' (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
                     output += (' (\x037%s\x03)' % ("no tags")).encode("utf8")
         else:
@@ -282,6 +282,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         Compare <id1>'s taste with <optionalId>'s or your current LastFM ID's taste.
         """
 
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours", channel)
         id2 = (self.db.getId(optionalId) or optionalId or self.db.getId(msg.nick) or msg.nick)
         id1 = (self.db.getId(id1) or id1)
 
@@ -299,8 +301,12 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         artist_names = [artist.getElementsByTagName("name")[0].firstChild.data
                        for artist in artists]
 
-        irc.reply(('%s and %s have %.1f%% music compatibility! Artists they share include: %s'
-                  % (id1, id2, score*100, ", ".join(artist_names))).encode("utf8"))
+        if showColours:
+            irc.reply(('\x0308%s\x03 and \x0308%s\x03 have \x0304%.1f%%\x03 music compatibility! Artists they share include: \x0312%s\x03'
+                      % (id1, id2, score*100, "\x03, \x0312".join(artist_names))).encode("utf8"))
+        else:
+            irc.reply(('%s and %s have %.1f%% music compatibility! Artists they share include: %s'
+                      % (id1, id2, score*100, ", ".join(artist_names))).encode("utf8"))
     
     compare = wrap(compare, ["something", optional("something")])
 
@@ -364,18 +370,18 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         if showColours:
             output = ("\x0312%s\x03" % name)
             if placeAndDates:
-                output += (" [\x035 %s\x03 -\x035 %s\x03, \x038%s\x03 ]" % (yearfrom, yearto, placeformed))
+                output += (" [\x0305%s\x03 - \x0305%s\x03, \x038%s\x03]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += (" (\x037 %s\x03,\x037 %s\x03,\x037 %s\x03 )" % (tag1,tag2,tag3))
+                output += (" (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)" % (tag1,tag2,tag3))
             if userPlayed:
                 output += (' %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
             output += (" %s" % url)
         else:
             output = ("%s" % name)
             if placeAndDates:
-                output += (" [ %s - %s, %s ]" % (yearfrom, yearto, placeformed))
+                output += (" [%s - %s, %s]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += (" ( %s, %s, %s )" % (tag1,tag2,tag3))
+                output += (" (%s, %s, %s)" % (tag1,tag2,tag3))
             if userPlayed:
                 output += (' %s plays by %s, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
             output += (" %s" % url)
