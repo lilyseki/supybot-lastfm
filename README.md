@@ -6,7 +6,7 @@ A plugin for supybot that displays various information about a LastFM ID in IRC.
 Usage
 -----
 
-Showing now playing information:
+Showing now playing, or most recently played information:
 ```
 05:33:14 lembas-nyan │ ~np
 05:33:17     samwise │ tacticalbread listened to "Untitled" by dälek about 2 hours ago. 1 plays by tacticalbread, 1043 plays by 492 listeners. (Hip-Hop, experimental, noise)
