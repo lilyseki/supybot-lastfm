@@ -8,7 +8,7 @@ Usage
 
 Showing now playing information:
 ```
-05:33:14 lembas-nyan │ np
+05:33:14 lembas-nyan │ ~np
 05:33:17     samwise │ tacticalbread listened to "Untitled" by dälek about 2 hours ago. 1 plays by tacticalbread, 1043 plays by 492 listeners. (Hip-Hop, experimental, noise)
 ```
 
@@ -24,12 +24,6 @@ Showing recent tracks:
 05:35:24     samwise │ tacticalbread's recenttracks: dälek – Untitled, dälek – Atypical Stereotype, dälek – 2012 (The Pillage), dälek – Gutter Tactics, dälek – We Lost Sight (with a total number of 11 entries)
 ```
 
-Showing help:
-```
-05:35:48 lembas-nyan │ ~help lastfm
-05:35:53     samwise │ (lastfm <method> [<id>]) -- Lists LastFM info where <method> is in [friends, neighbours, profile, recenttracks, tags, topalbums, topartists, toptracks]. Set your LastFM ID with the set method (default is your current nick) or specify <id> to switch for one call.
-```
-
 Searching artists:
 ```
 05:36:58 lembas-nyan │ ~lastfm search M83
@@ -40,6 +34,18 @@ Comparing two users:
 ```
 05:38:09 lembas-nyan │ ~compare suzuki-nyan
 05:38:10     samwise │ gurosebe and tacticalbread have 98.0% music compatibility! Artists they share include: Matryoshka, Cloudkicker, Nujabes, YUI, きゃりーぱみゅぱみゅ
+```
+
+Showing help:
+```
+05:35:48 lembas-nyan │ ~help lastfm
+05:35:53     samwise │ (lastfm <method> [<id>]) -- Lists LastFM info where <method> is in [friends, neighbours, profile, recenttracks, tags, topalbums, topartists, toptracks]. Set your LastFM ID with the set method (default is your current nick) or specify <id> to switch for one call.
+```
+
+Showing commands:
+```
+05:40:44 lembas-nyan │ ~list lastfm
+05:40:47     samwise │ compare, lastfm, np, profile, search, and set
 ```
 
 Development
