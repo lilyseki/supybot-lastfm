@@ -270,9 +270,11 @@ class LastFM(callbacks.Plugin):
         xml = minidom.parse(f).getElementsByTagName("profile")[0]
         keys = "realname registered age gender country playcount".split()
         profile = tuple([self._parse(xml, node) for node in keys])
+        url = ('http://www.last.fm/user/%s' % id)
 
-        irc.reply(("%s (realname: %s) registered on %s; age: %s / %s; \
+        output = (("%s (realname: %s) registered on %s; age: %s / %s; \
 Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
+        irc.reply("%s [ %s ]" % (output,url))
 
     profile = wrap(profile, [optional("something")])
 
