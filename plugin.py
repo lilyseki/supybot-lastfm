@@ -392,6 +392,55 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
     search = wrap(search, ['text'])
 
+
+    def plays(self, irc, msg, args, query):
+        """<query>
+
+        Displays user plays for artist <query>.
+        """
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours", channel)
+        artist = urllib.quote_plus(query)
+        userPlayed = True
+
+        try:
+            f = urllib2.urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
+                    % (self.APIURL, artist, id))
+        except urllib2.HTTPError:
+            irc.error("Unknown artist %s or something lol" % artist)
+            return
+        
+        xml = minidom.parse(f).getElementsByTagName("artist")[0]
+        try:
+            name = xml.getElementsByTagName("name")[0].firstChild.data
+            listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
+            playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
+        except:
+            irc.error("Can't find artist %s! :O" % artist)
+            return
+
+        try:
+            userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
+        except:
+            userPlayed = False
+
+        if showColours:
+            output = ("\x0312%s\x03" % name)
+            if not userPlayed:
+                userplaycount = 0
+            output += (': %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
+        else:
+            output = ("%s" % name)
+            if not userPlayed:
+                userplaycount = 0
+            output += (': %s plays by %s, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
+
+        irc.reply(output)
+
+    plays = wrap(plays, ['text'])
+
     def _parse(self, data, node, exceptMsg="not specified"):
             try:
                 return data.getElementsByTagName(node)[0].firstChild.data
