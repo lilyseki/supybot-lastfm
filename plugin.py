@@ -113,8 +113,6 @@ class LastFM(callbacks.Plugin):
         Set your LastFM ID with the set method (default is your current nick)
         or specify <id> to switch for one call.
         """
-        #channel = msg.args[0]
-        #verbose = self.registryValue("npverbose", channel)
 
         id = (optionalId or self.db.getId(msg.nick) or msg.nick)
         channel = msg.args[0]
@@ -156,11 +154,6 @@ class LastFM(callbacks.Plugin):
             listenercount = playinfo.getElementsByTagName("listeners")[0].firstChild.data
             userloved = playinfo.getElementsByTagName("userloved")[0].firstChild.data
         except:
-            #irc.error("You broke something! Unable to get track info for \"%s - %s\" or %s is an Unknown ID" % (artist, track, id))
-            #sys.stderr.write("%s&method=track.getInfo&username=%s&artist=%s&track=%s" % (self.APIURL, id, artist2, track2))
-            #irc.reply(('%s is listening to "%s" by %s%s.'
-                    #% (user, track, artist, album)).encode("utf8"))
-            #return
             trackInfo = False
 
         try:
@@ -168,22 +161,19 @@ class LastFM(callbacks.Plugin):
         except:
             userplaycount = 0
 
-        # Tags n shit
-        tags = ""
-        try:
-            tags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
-        except:
-            #sys.stderr.write("%s&artist.getTopTags&artist=%s" % (self.APIURL,artist2))
-            showTags = False
-
-        isTagged = True
-        try:
-            toptags = minidom.parse(tags).getElementsByTagName("toptags")[0]
-            tag1 = toptags.getElementsByTagName("tag")[0].getElementsByTagName("name")[0].firstChild.data
-            tag2 = toptags.getElementsByTagName("tag")[1].getElementsByTagName("name")[0].firstChild.data
-            tag3 = toptags.getElementsByTagName("tag")[2].getElementsByTagName("name")[0].firstChild.data
-        except:
+        # tags
+        tags = []
+        thetags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
+        toptags = minidom.parse(thetags).getElementsByTagName("toptags")[0]
+        for item in range(3):
+            try:
+                tags.append(toptags.getElementsByTagName("tag")[item].getElementsByTagName("name")[0].firstChild.data)
+            except IndexError:
+                break
+        if len(tags) == 0:
             isTagged = False
+        else:
+            isTagged = True
 
         if showColours:
             if isNowplaying:
@@ -198,7 +188,11 @@ class LastFM(callbacks.Plugin):
                     output += ('. %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
             if showTags == True:
                 if isTagged == True:
-                    output += (' (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
+                    output += " ( "
+                    for item in tags:
+                        output += ("\x0307%s\x03 " % item).encode("utf8")
+                    output += ")"
+                    #output += (' (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
                     output += (' (\x037%s\x03)' % ("no tags")).encode("utf8")
         else:
@@ -214,38 +208,16 @@ class LastFM(callbacks.Plugin):
                     output += ('. %s plays by %s, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
             if showTags == True:
                 if isTagged == True:
-                    output += (' (%s, %s, %s)' % (tag1, tag2, tag3)).encode("utf8")
+                    output += " ( "
+                    for item in tags:
+                        output += ("%s " % item).encode("utf8")
+                    output += ")"
+                    #output += (' (%s, %s, %s)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
                     output += (' (%s)' % ("no tags")).encode("utf8")
 
         irc.reply(output)
 
-        #if isNowplaying:
-            #if trackInfo == True:
-                #if userloved == "1":
-                    #irc.reply(('%s is listening to "%s" by %s%s %s. %s plays by %s, %s plays by %s listeners.'
-                            #% (user, track, artist, album, u'♥', userplaycount, user, playcount, listenercount)).encode("utf8"))
-                #else:
-                    #irc.reply(('%s is listening to "%s" by %s%s. %s plays by %s, %s plays by %s listeners.'
-                            #% (user, track, artist, album, userplaycount, user, playcount, listenercount)).encode("utf8"))
-            #else:
-                #irc.reply(('%s is listening to "%s" by %s%s.'
-                    #% (user, track, artist, album)).encode("utf8"))
-        #else:
-            #if trackInfo == True:
-                #if userloved == "1":
-                    #time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
-                    #irc.reply(('%s listened to "%s" by %s%s %s about %s. %s plays by %s, %s plays by %s listeners.'
-                            #% (user, track, artist, album, u'♥',
-                                #self._formatTimeago(time), userplaycount, user, playcount, listenercount )).encode("utf-8"))
-                #else:
-                    #time = int(t.getElementsByTagName("date")[0].getAttribute("uts"))
-                    #irc.reply(('%s listened to "%s" by %s%s about %s. %s plays by %s, %s plays by %s listeners.'
-                            #% (user, track, artist, album,
-                                #self._formatTimeago(time), userplaycount, user, playcount, listenercount )).encode("utf-8"))
-            #else:
-                #irc.reply(('%s listened to "%s" by %s%s %s about %s.'
-                        #% (user, track, artist, album, self._formatTimeago(time))).encode("utf-8"))
     np = wrap(np, [optional("something")])
     # }}}
 
@@ -355,16 +327,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             return
         
         xml = minidom.parse(f).getElementsByTagName("artist")[0]
-        try:
-            name = xml.getElementsByTagName("name")[0].firstChild.data
-            url = xml.getElementsByTagName("url")[0].firstChild.data
-            listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
-            playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
-            bio = xml.getElementsByTagName("bio")[0]
-            #summary = bio.getElementsByTagName("summary")[0].firstChild.data
-        except:
-            irc.error("Can't find artist %s! :O" % artist)
-            return
+        name = xml.getElementsByTagName("name")[0].firstChild.data
+        url = xml.getElementsByTagName("url")[0].firstChild.data
+        listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
+        playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
+        bio = xml.getElementsByTagName("bio")[0]
 
         try:
             userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
@@ -381,13 +348,15 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
                 yearto = "Present"
         except:
             placeAndDates = False
-
-        try:
-            toptags = xml.getElementsByTagName("tags")[0]
-            tag1 = toptags.getElementsByTagName("tag")[0].getElementsByTagName("name")[0].firstChild.data
-            tag2 = toptags.getElementsByTagName("tag")[1].getElementsByTagName("name")[0].firstChild.data
-            tag3 = toptags.getElementsByTagName("tag")[2].getElementsByTagName("name")[0].firstChild.data
-        except:
+        
+        tags = []
+        toptags = xml.getElementsByTagName("tags")[0]
+        for item in range(3):
+            try:
+                tags.append(toptags.getElementsByTagName("tag")[item].getElementsByTagName("name")[0].firstChild.data)
+            except IndexError:
+                break
+        if len(tags) == 0:
             isTagged = False
 
         if showColours:
@@ -395,7 +364,10 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             if placeAndDates:
                 output += (" [\x0305%s\x03 - \x0305%s\x03, \x038%s\x03]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += (" (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)" % (tag1,tag2,tag3))
+                output += " ( "
+                for item in tags:
+                    output += ("\x0307%s\x03 " % item)
+                output += ")"
             if not userPlayed:
                 userplaycount = 0
             output += (' %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
@@ -405,7 +377,10 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             if placeAndDates:
                 output += (" [%s - %s, %s]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += (" (%s, %s, %s)" % (tag1,tag2,tag3))
+                output += " ( "
+                for item in tags:
+                    output += ("%s " % item)
+                output += ")"
             if not userPlayed:
                 userplaycount = 0
             output += (' %s plays by %s, %s plays by %s listeners.' % (userplaycount, id, playcount, listenercount)).encode("utf8")
