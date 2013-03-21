@@ -138,8 +138,8 @@ class LastFM(callbacks.Plugin):
         artist = t.getElementsByTagName("artist")[0].firstChild.data
         track = t.getElementsByTagName("name")[0].firstChild.data
         try:
-            album = urllib.quote_plus(" ["+t.getElementsByTagName("album")[0].getElementsByTagName("title")[0].firstChild.data+"]")
-        except:
+            album = " ["+t.getElementsByTagName("album")[0].firstChild.data+"]"
+        except AttributeError:
             album = ""
 
         artist2 = urllib.quote_plus(artist.encode("utf8"))
@@ -188,9 +188,11 @@ class LastFM(callbacks.Plugin):
                     output += ('. %s plays by \x038%s\x03, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
             if showTags == True:
                 if isTagged == True:
-                    output += " ( "
-                    for item in tags:
-                        output += ("\x0307%s\x03 " % item).encode("utf8")
+                    output += " ("
+                    for i in range(len(tags)):
+                        output += ("\x0307%s\x03" % tags[i]).encode("utf8")
+                        if i != (len(tags)-1):
+                            output += ", "
                     output += ")"
                     #output += (' (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
@@ -208,9 +210,11 @@ class LastFM(callbacks.Plugin):
                     output += ('. %s plays by %s, %s plays by %s listeners.' % (userplaycount, user, playcount, listenercount)).encode("utf8")
             if showTags == True:
                 if isTagged == True:
-                    output += " ( "
-                    for item in tags:
-                        output += ("%s " % item).encode("utf8")
+                    output += " ("
+                    for i in range(len(tags)):
+                        output += ("%s" % tags[i]).encode("utf8")
+                        if i != (len(tags)-1):
+                            output += ", "
                     output += ")"
                     #output += (' (%s, %s, %s)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
@@ -364,9 +368,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             if placeAndDates:
                 output += (" [\x0305%s\x03 - \x0305%s\x03, \x038%s\x03]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += " ( "
-                for item in tags:
-                    output += ("\x0307%s\x03 " % item)
+                output += " ("
+                for i in range(len(tags)):
+                    output += ("\x0307%s\x03" % tags[i])
+                    if i != (len(tags)-1):
+                        output += ", "
                 output += ")"
             if not userPlayed:
                 userplaycount = 0
@@ -377,9 +383,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             if placeAndDates:
                 output += (" [%s - %s, %s]" % (yearfrom, yearto, placeformed))
             if isTagged:
-                output += " ( "
-                for item in tags:
-                    output += ("%s " % item)
+                output += " ("
+                for i in range(len(tags)):
+                    output += ("%s " % tags[i])
+                    if i != (len(tags)-1):
+                        output += ", "
                 output += ")"
             if not userPlayed:
                 userplaycount = 0
