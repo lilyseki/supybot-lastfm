@@ -36,6 +36,12 @@ Comparing two users:
 05:38:10     samwise │ gurosebe and tacticalbread have 98.0% music compatibility! Artists they share include: Matryoshka, Cloudkicker, Nujabes, YUI, きゃりーぱみゅぱみゅ
 ```
 
+Similar Artists:
+```
+05:18:06  lembas │ ~similar Spangle call Lilli line
+05:18:07 samwise │ Artists similar to Spangle call Lilli line: NINI TOUNUMA (100.0%), audio safari (58.4%), クラムボン (56.6%), advantage Lucy (55.2%), 点と線 (54.5%)
+```
+
 Showing help:
 ```
 05:35:48 lembas-nyan │ ~help lastfm
