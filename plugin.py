@@ -441,6 +441,52 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
     plays = wrap(plays, ['text'])
     # }}}
 
+    # {{{ similar
+    def similar(self, irc, msg, args, query):
+        """<artist>
+
+        Shows artists similar to <artist>
+        """
+
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours",channel)
+        artist = urllib.quote_plus(query)
+        limit = 5
+
+        try:
+            f = urllib2.urlopen("%s&method=artist.getSimilar&autocorrect=1&artist=%s&limit=%s"
+                    % (self.APIURL, artist, limit))
+        except urllib2.HTTPError:
+            irc.error("Unknown artist %s or something lol" % artist)
+            return
+        
+        xml = minidom.parse(f).getElementsByTagName("similarartists")[0]
+        theArtist = xml.getAttribute("artist")
+        name = []
+        similarity = []
+        for i in range(limit):
+            try:
+                name.append(xml.getElementsByTagName("artist")[i].getElementsByTagName("name")[0].firstChild.data)
+                similarity.append(xml.getElementsByTagName("artist")[i].getElementsByTagName("match")[0].firstChild.data)
+            except ValueError:
+                break
+        if showColours:
+            output = ("Artists similar to \x0308%s\x03: " % theArtist)
+            for i in range(len(name)):
+                output += ("\x0312%s\x03 (\x0304%.1f%%\x03)" % (name[i], float(similarity[i])*100))
+                if i != (len(name)-1):
+                    output += ", "
+        else:
+            output = ("Artists similar to %s: " % theArtist)
+            for i in range(len(name)):
+                output += ("%s (%.1f%%)" % (name[i], float(similarity[i])*100))
+                if i != (len(name)-1):
+                    output += ", "
+        irc.reply(output)
+
+    similar = wrap(similar, ['text'])
+    #}}}
+
     # {{{ others
     def _parse(self, data, node, exceptMsg="not specified"):
             try:
