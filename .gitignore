@@ -30,3 +30,4 @@ conf/
 logs/
 _plugin.py
 *.pyc
+*.swp
