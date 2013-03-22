@@ -388,7 +388,7 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             if isTagged:
                 output += " ("
                 for i in range(len(tags)):
-                    output += ("%s " % tags[i])
+                    output += ("%s" % tags[i])
                     if i != (len(tags)-1):
                         output += ", "
                 output += ")"
