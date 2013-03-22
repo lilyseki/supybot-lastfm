@@ -41,11 +41,14 @@ import supybot.ircmsgs as ircmsgs
 import supybot.callbacks as callbacks
 import supybot.world as world
 
+import re
+
 import urllib2
 #from urllib import quote_plus
 from xml.dom import minidom
 import urllib
 from time import time
+from BeautifulSoup import BeautifulSoup
 
 from LastFMDB import *
 ### }}}
@@ -131,7 +134,7 @@ class LastFM(callbacks.Plugin):
         user = xml.getAttribute("user")
         try:
             t = xml.getElementsByTagName("track")[0] # most recent track
-        except:
+        except IndexError:
             irc.error("No tracks or something for %s lol" % id)
             return
         isNowplaying = (t.getAttribute("nowplaying") == "true")
@@ -153,12 +156,12 @@ class LastFM(callbacks.Plugin):
             playcount = playinfo.getElementsByTagName("playcount")[0].firstChild.data
             listenercount = playinfo.getElementsByTagName("listeners")[0].firstChild.data
             userloved = playinfo.getElementsByTagName("userloved")[0].firstChild.data
-        except:
+        except IndexError:
             trackInfo = False
 
         try:
             userplaycount = playinfo.getElementsByTagName("userplaycount")[0].firstChild.data
-        except:
+        except IndexError:
             userplaycount = 0
 
         # tags
@@ -189,12 +192,11 @@ class LastFM(callbacks.Plugin):
             if showTags == True:
                 if isTagged == True:
                     output += " ("
-                    for i in range(len(tags)):
-                        output += ("\x0307%s\x03" % tags[i]).encode("utf8")
+                    for i,item in enumerate(tags):
+                        output += ("\x0307%s\x03" % item).encode("utf8")
                         if i != (len(tags)-1):
                             output += ", "
                     output += ")"
-                    #output += (' (\x0307%s\x03, \x0307%s\x03, \x0307%s\x03)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
                     output += (' (\x037%s\x03)' % ("no tags")).encode("utf8")
         else:
@@ -211,12 +213,11 @@ class LastFM(callbacks.Plugin):
             if showTags == True:
                 if isTagged == True:
                     output += " ("
-                    for i in range(len(tags)):
-                        output += ("%s" % tags[i]).encode("utf8")
+                    for i,item in enumerate(tags):
+                        output += ("%s" % item).encode("utf8")
                         if i != (len(tags)-1):
                             output += ", "
                     output += ")"
-                    #output += (' (%s, %s, %s)' % (tag1, tag2, tag3)).encode("utf8")
                 else:
                     output += (' (%s)' % ("no tags")).encode("utf8")
 
@@ -308,8 +309,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
     compare = wrap(compare, ["something", optional("something")])
     # }}}
 
-    # {{{ search
-    def search(self, irc, msg, args, query):
+    # {{{ artist
+    def artist(self, irc, msg, args, query):
         """<query>
 
         Searches last.fm for artist <query>.
@@ -339,7 +340,7 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
         try:
             userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
-        except:
+        except IndexError:
             userPlayed = False
 
         try:
@@ -348,9 +349,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             yearfrom = bio.getElementsByTagName("yearformed")[0].firstChild.data
             try:
                 yearto = formationlist.getElementsByTagName("yearto")[0].firstChild.data
-            except:
+            except IndexError:
                 yearto = "Present"
-        except:
+            except AttributeError:
+                yearto = "Present"
+        except IndexError:
             placeAndDates = False
         
         tags = []
@@ -396,8 +399,90 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
         irc.reply(output)
 
-    search = wrap(search, ['text'])
+    artist = wrap(artist, ['text'])
     # }}}
+
+    #{{{ tag
+    def tag(self, irc, msg, args, query):
+        """<tag>
+        Displays some info about <tag>
+        """
+
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours", channel)
+        tag = urllib.quote_plus(query)
+        summaryLength = 230
+        numArtists = 5
+        try:
+            f = urllib2.urlopen("%s&method=tag.getInfo&tag=%s" % (self.APIURL, tag))
+            j = urllib2.urlopen("%s&method=tag.getTopArtists&tag=%s&limit=%s" 
+                    % (self.APIURL, tag, numArtists))
+        except urllib2.HTTPError:
+            irc.error("Unknown tag %s or something lol" % tag)
+            return
+
+        # tag info
+        xml = minidom.parse(f).getElementsByTagName("tag")[0]
+        try:
+            name = xml.getElementsByTagName("name")[0].firstChild.data.encode("utf8")
+            url = xml.getElementsByTagName("url")[0].firstChild.data.encode("utf8")
+            taggings = xml.getElementsByTagName("taggings")[0].firstChild.data
+        except IndexError:
+            irc.error("Something broke!")
+            return
+        try:
+            summary = xml.getElementsByTagName("summary")[0].firstChild.data
+        except IndexError:
+            summary = ""
+            
+        if summary != None and summary != "":
+            summary = BeautifulSoup(summary, convertEntities=BeautifulSoup.HTML_ENTITIES)
+            summary = str(summary)
+            # I janked these lines from BTN's DeepThroat's lastfm plugin
+            summary = re.sub("\<[^<]+\>", "", summary)
+            summary = re.sub("\s+", " ", summary)
+            summary = summary[:summaryLength] + "..." if (summary[:summaryLength] != summary) else summary
+            summary += " "
+
+        # top artist info
+        xml2 = minidom.parse(j).getElementsByTagName("topartists")[0]
+
+        topArtists = []
+        for i in range(numArtists):
+            try:
+                topArtists.append(xml2.getElementsByTagName("name")[i].firstChild.data)
+            except IndexError:
+                break
+        if len(topArtists) == 0:
+            topArtists.append("No top artists")
+
+        # process output
+        output = ""
+        if showColours:
+            output += ("\x0308%s\x03 (\x0304%s\x03 taggings): %s" 
+                    % (name.capitalize(), taggings, summary))
+            if topArtists[0] != "No top artists":
+                output += "Top Artists: "
+            for i,item in enumerate(topArtists):
+                output += ("\x0312%s\x03" % item)
+                if i != (len(topArtists)-1):
+                    output += ", "
+            output += (" [%s]" % url)
+        else:
+            output += ("%s (%s taggings): %s" 
+                    % (name.capitalize(), taggings, summary))
+            if topArtists[0] != "No top artists":
+                output += "Top Artists: "
+            for i,item in enumerate(topArtists):
+                output += ("%s" % item)
+                if i != (len(topArtists)-1):
+                    output += ", "
+            output += (" [%s]" % url)
+        irc.reply(output)
+
+    tag = wrap(tag, ['text'])
+
+    #}}}
 
     # {{{ plays
     def plays(self, irc, msg, args, query):
@@ -424,13 +509,13 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             name = xml.getElementsByTagName("name")[0].firstChild.data
             listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
             playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
-        except:
+        except IndexError:
             irc.error("Can't find artist %s! :O" % artist)
             return
 
         try:
             userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
-        except:
+        except IndexError:
             userPlayed = False
 
         if showColours:
@@ -476,18 +561,18 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             try:
                 name.append(xml.getElementsByTagName("artist")[i].getElementsByTagName("name")[0].firstChild.data)
                 similarity.append(xml.getElementsByTagName("artist")[i].getElementsByTagName("match")[0].firstChild.data)
-            except ValueError:
+            except IndexError:
                 break
         if showColours:
             output = ("Artists similar to \x0308%s\x03: " % theArtist)
-            for i in range(len(name)):
-                output += ("\x0312%s\x03 (\x0304%.1f%%\x03)" % (name[i], float(similarity[i])*100))
+            for i,item in enumerate(name):
+                output += ("\x0312%s\x03 (\x0304%.1f%%\x03)" % (item, float(similarity[i])*100))
                 if i != (len(name)-1):
                     output += ", "
         else:
             output = ("Artists similar to %s: " % theArtist)
-            for i in range(len(name)):
-                output += ("%s (%.1f%%)" % (name[i], float(similarity[i])*100))
+            for i,item in enumerate(name):
+                output += ("%s (%.1f%%)" % (item, float(similarity[i])*100))
                 if i != (len(name)-1):
                     output += ", "
         irc.reply(output)
