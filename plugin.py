@@ -56,7 +56,7 @@ from LastFMDB import *
 class LastFM(callbacks.Plugin):
     # {{{ vars
     BASEURL = "http://ws.audioscrobbler.com/1.0/user"
-    APIKEY = "" # FIXME: Get own key
+    APIKEY = "7f11b8c4505415d7b9059339b47812d5" # FIXME: Get own key
     APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
     # }}}
 
@@ -118,6 +118,8 @@ class LastFM(callbacks.Plugin):
         """
 
         id = (optionalId or self.db.getId(msg.nick) or msg.nick)
+        if msg.nick.startswith("stoic") and not self.db.getId(msg.nick):
+            id = "pentax_"
         channel = msg.args[0]
         showColours = self.registryValue("showColours", channel)
         trackInfo = self.registryValue("showTrackInfo", channel)
@@ -297,13 +299,19 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
                        for artist in artists]
         output = ""
         if showColours:
-            output += ('\x0308%s\x03 and \x0308%s\x03 have \x0304%.1f%%\x03 music compatibility!' % (id1, id2, score*100))
-            if score != 0:
-                output += (' Artists they share include: \x0312%s\x03' % ("\x03, \x0312".join(artist_names))).encode("utf8")
+            if score*100 == -100.0:
+                output += ("We're recharging the batteries of the taste-o-meter! ごめん！")
+            else:
+                output += ('\x0308%s\x03 and \x0308%s\x03 have \x0304%.1f%%\x03 music compatibility!' % (id1, id2, score*100))
+                if score != 0:
+                    output += (' Artists they share include: \x0312%s\x03' % ("\x03, \x0312".join(artist_names))).encode("utf8")
         else:
-            output += ('%s and %s have %.1f%% music compatibility!' % (id1, id2, score*100))
-            if score != 0:
-                output += (' Artists they share include: %s' % (", ".join(artist_names))).encode("utf8")
+            if score*100 == -100.0:
+                output += ("We're recharging the batteries of the taste-o-meter! ごめん！")
+            else:
+                output += ('%s and %s have %.1f%% music compatibility!' % (id1, id2, score*100))
+                if score != 0:
+                    output += (' Artists they share include: %s' % (", ".join(artist_names))).encode("utf8")
         irc.reply(output)
     
     compare = wrap(compare, ["something", optional("something")])
@@ -436,13 +444,13 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             summary = ""
             
         if summary != None and summary != "":
-            summary = BeautifulSoup(summary, convertEntities=BeautifulSoup.HTML_ENTITIES)
-            summary = str(summary)
+            summary = str(BeautifulSoup(summary, convertEntities=BeautifulSoup.HTML_ENTITIES))
             # I janked these lines from BTN's DeepThroat's lastfm plugin
             summary = re.sub("\<[^<]+\>", "", summary)
             summary = re.sub("\s+", " ", summary)
             summary = summary[:summaryLength] + "..." if (summary[:summaryLength] != summary) else summary
             summary += " "
+            summary = unicode(summary, errors='ignore')
 
         # top artist info
         xml2 = minidom.parse(j).getElementsByTagName("topartists")[0]
@@ -459,7 +467,7 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         # process output
         output = ""
         if showColours:
-            output += ("\x0308%s\x03 (\x0304%s\x03 taggings): %s" 
+            output += (u"\x0308%s\x03 (\x0304%s\x03 taggings): %s" 
                     % (name.capitalize(), taggings, summary))
             if topArtists[0] != "No top artists":
                 output += "Top Artists: "
@@ -467,7 +475,7 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
                 output += ("\x0312%s\x03" % item)
                 if i != (len(topArtists)-1):
                     output += ", "
-            output += (" [%s]" % url)
+            output += (" [ %s ]" % url)
         else:
             output += ("%s (%s taggings): %s" 
                     % (name.capitalize(), taggings, summary))
@@ -477,7 +485,7 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
                 output += ("%s" % item)
                 if i != (len(topArtists)-1):
                     output += ", "
-            output += (" [%s]" % url)
+            output += (" [ %s ]" % url)
         irc.reply(output)
 
     tag = wrap(tag, ['text'])
@@ -578,6 +586,276 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         irc.reply(output)
 
     similar = wrap(similar, ['text'])
+    #}}}
+
+    #{{{ top artists
+    def topartists(self, irc, msg, args, period, userid):
+        """[<period>] [<id>]
+
+        Show <id>'s or saved user's top artists from period (7d,1m,3m,6m,12m,o)"""
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours",channel)
+        numArtists = 10
+        noId = True
+        timeperiod = ""
+
+        # python needs switch statements
+        # this whole code is also pretty gross, eh?
+        # I'm terrible at python 8)
+        if period == "7d":
+            period = "7day"
+            timeperiod = "seven days"
+        elif period == "1m":
+            period = "1month"
+            timeperiod = "one month"
+        elif period == "3m":
+            period = "3month"
+            timeperiod = "three months"
+        elif period == "6m":
+            period = "6month"
+            timeperiod = "six months"
+        elif period == "12m":
+            period = "12month"
+            timeperiod = "twelve months"
+        elif period == "o":
+            period = "overall"
+            timeperiod = "overall"
+        else:
+            id = period
+            period = "overall"
+            noId = False
+        if noId:
+            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        else:
+            #id = (self.db.getId(id) or id)
+            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            timeperiod = "overall"
+
+        try:
+            f = urllib2.urlopen("%s&method=user.getTopArtists&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numArtists))
+        except urllib2.HTTPError:
+            irc.error("Unknown ID %s or bad period %s" % (id, period))
+            return
+        xml = minidom.parse(f).getElementsByTagName("topartists")[0]
+        artists = xml.getElementsByTagName("artist")
+
+        topArtists = []
+        playCount = []
+
+        for i in range(numArtists):
+            try:
+                topArtists.append(artists[i].getElementsByTagName("name")[0].firstChild.data)
+                playCount.append(artists[i].getElementsByTagName("playcount")[0].firstChild.data)
+            except IndexError:
+                break
+
+        output = ''
+
+        if showColours:
+            if timeperiod != "overall":
+                output += ("\x0308%s\x03's top artists from the last %s: " % (id, timeperiod))
+            else:
+                output += ("\x0308%s\x03's %s top artists: " % (id, timeperiod))
+            for i,item in enumerate(topArtists):
+                output += ("\x0312%s\x03 (\x0304%s\x03)" % (item, playCount[i]))
+                if i != (len(topArtists)-1):
+                    output += ", "
+        else:
+            if timeperiod != "overall":
+                output += ("%s\'s top artists from the last %s: " % (id, timeperiod))
+            else:
+                output += ("%s\'s %s top artists: " % (id, timeperiod))
+            for i,item in enumerate(topArtists):
+                output += ("%s (%s)" % (item, playCount[i]))
+                if i != (len(topArtists)-1):
+                    output += ", "
+        
+        irc.reply(output)
+
+    topartists = wrap(topartists, [optional("something"), optional("something")])
+
+    #}}}
+
+    #{{{ top albums
+    def topalbums(self, irc, msg, args, period, userid):
+        """[<period>] [<id>]
+
+        Show <id>'s or saved user's top albums from period (7d,1m,3m,6m,12m,o)"""
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours",channel)
+        numAlbums = 7
+        noId = True
+        timeperiod = ""
+
+        # python needs switch statements
+        # this whole code is also pretty gross, eh?
+        # I'm terrible at python 8)
+        # I also just copy/pasted from top artists
+        if period == "7d":
+            period = "7day"
+            timeperiod = "seven days"
+        elif period == "1m":
+            period = "1month"
+            timeperiod = "one month"
+        elif period == "3m":
+            period = "3month"
+            timeperiod = "three months"
+        elif period == "6m":
+            period = "6month"
+            timeperiod = "six months"
+        elif period == "12m":
+            period = "12month"
+            timeperiod = "twelve months"
+        elif period == "o":
+            period = "overall"
+            timeperiod = "overall"
+        else:
+            id = period
+            period = "overall"
+            noId = False
+        if noId:
+            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        else:
+            #id = (self.db.getId(id) or id)
+            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            timeperiod = "overall"
+
+        try:
+            f = urllib2.urlopen("%s&method=user.getTopAlbums&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numAlbums))
+        except urllib2.HTTPError:
+            irc.error("Unknown ID %s or bad period %s" % (id, period))
+            return
+        xml = minidom.parse(f).getElementsByTagName("topalbums")[0]
+        albums = xml.getElementsByTagName("album")
+
+        topAlbums = []
+        playCount = []
+        artists = []
+
+        for i in range(numAlbums):
+            try:
+                topAlbums.append(albums[i].getElementsByTagName("name")[0].firstChild.data)
+                playCount.append(albums[i].getElementsByTagName("playcount")[0].firstChild.data)
+                artists.append(albums[i].getElementsByTagName("artist")[0].getElementsByTagName("name")[0].firstChild.data)
+            except IndexError:
+                break
+
+        output = ''
+
+        if showColours:
+            if timeperiod != "overall":
+                output += ("\x0308%s\x03's top albums from the last %s: " % (id, timeperiod))
+            else:
+                output += ("\x0308%s\x03's %s top albums: " % (id, timeperiod))
+            for i,item in enumerate(topAlbums):
+                output += ("\x0312%s\x03 - \x0303%s\x03 (\x0304%s\x03)" % (artists[i], item, playCount[i]))
+                if i != (len(topAlbums)-1):
+                    output += ", "
+        else:
+            if timeperiod != "overall":
+                output += ("%s\'s top albums from the last %s: " % (id, timeperiod))
+            else:
+                output += ("%s\'s %s top albums: " % (id, timeperiod))
+            for i,item in enumerate(topAlbums):
+                output += ("%s - %s (%s)" % (artists[i], item, playCount[i]))
+                if i != (len(topAlbums)-1):
+                    output += ", "
+        
+        irc.reply(output)
+
+    topalbums = wrap(topalbums, [optional("something"), optional("something")])
+
+    #}}}
+
+    #{{{ top tracks
+    def toptracks(self, irc, msg, args, period, userid):
+        """[<period>] [<id>]
+
+        Show <id>'s or saved user's top tracks from period (7d,1m,3m,6m,12m,o)"""
+        channel = msg.args[0]
+        showColours = self.registryValue("showColours",channel)
+        numTracks = 7
+        noId = True
+        timeperiod = ""
+
+        # python needs switch statements
+        # this whole code is also pretty gross, eh?
+        # I'm terrible at python 8)
+        # I also just copy/pasted from top artists
+        if period == "7d":
+            period = "7day"
+            timeperiod = "seven days"
+        elif period == "1m":
+            period = "1month"
+            timeperiod = "one month"
+        elif period == "3m":
+            period = "3month"
+            timeperiod = "three months"
+        elif period == "6m":
+            period = "6month"
+            timeperiod = "six months"
+        elif period == "12m":
+            period = "12month"
+            timeperiod = "twelve months"
+        elif period == "o":
+            period = "overall"
+            timeperiod = "overall"
+        else:
+            id = period
+            period = "overall"
+            noId = False
+        if noId:
+            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        else:
+            #id = (self.db.getId(id) or id)
+            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            timeperiod = "overall"
+
+        try:
+            f = urllib2.urlopen("%s&method=user.getTopTracks&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numTracks))
+        except urllib2.HTTPError:
+            irc.error("Unknown ID %s or bad period %s" % (id, period))
+            return
+        xml = minidom.parse(f).getElementsByTagName("toptracks")[0]
+        tracks = xml.getElementsByTagName("track")
+
+        topTracks = []
+        playCount = []
+        artists = []
+
+        for i in range(numTracks):
+            try:
+                topTracks.append(tracks[i].getElementsByTagName("name")[0].firstChild.data)
+                playCount.append(tracks[i].getElementsByTagName("playcount")[0].firstChild.data)
+                artists.append(tracks[i].getElementsByTagName("artist")[0].getElementsByTagName("name")[0].firstChild.data)
+            except IndexError:
+                break
+
+        output = ''
+
+        if showColours:
+            if timeperiod != "overall":
+                output += ("\x0308%s\x03's top tracks from the last %s: " % (id, timeperiod))
+            else:
+                output += ("\x0308%s\x03's %s top tracks: " % (id, timeperiod))
+            for i,item in enumerate(topTracks):
+                output += ("\x0312%s\x03 - \x0303%s\x03 (\x0304%s\x03)" % (artists[i], item, playCount[i]))
+                if i != (len(topTracks)-1):
+                    output += ", "
+        else:
+            if timeperiod != "overall":
+                output += ("%s\'s top tracks from the last %s: " % (id, timeperiod))
+            else:
+                output += ("%s\'s %s top tracks: " % (id, timeperiod))
+            for i,item in enumerate(topTracks):
+                output += ("%s - %s (%s)" % (artists[i], item, playCount[i]))
+                if i != (len(topTracks)-1):
+                    output += ", "
+        
+        irc.reply(output)
+
+    toptracks = wrap(toptracks, [optional("something"), optional("something")])
+
     #}}}
 
     # {{{ others
