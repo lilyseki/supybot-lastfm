@@ -1,7 +1,7 @@
 ###
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2008, Kevin Funk
+# Copyright (c) 2008, 2013 Kevin Funk, Shad Lillie
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -49,10 +49,11 @@ __contributors__ = {
             supybot.Author("Ilya Kuznetsov", "worklez", "worklez@gmail.com"): ["profile"],
             supybot.Author("Pavel Dvořák", "czshadow", "czshadow@gmail.com"):
             ["misc"],
+            supybot.Author("Shad Lillie", "lembas", "lembas@lembas.ws"): ["various"],
         }
 
 # This is a url where the most recent plugin package can be downloaded.
-__url__ = 'http://supybot.com/Members/krf/LastFM/'
+__url__ = 'https://github.com/tacticalbread/supybot-lastfm'
 
 import config
 import plugin
