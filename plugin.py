@@ -863,10 +863,6 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
     #{{{ first/last played
     def played(self, msg, first, query):
-        """<artist>
-        
-        Shows when <id> first listened to <artist>
-        """
         channel = msg.args[0]
         id = (self.db.getId(msg.nick) or msg.nick)
         showColours = self.registryValue("showColours", channel)
@@ -931,9 +927,15 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         return output
 
     def firstplayed(self, irc, msg, args, query):
+        """<artist>
+
+        Shows when user first played <artist>"""
         irc.reply(self.played(msg,True,query))
     firstplayed = wrap(firstplayed, ["text"])
     def lastplayed(self, irc, msg, args, query):
+        """<artist>
+
+        Shows when user last played <artist>"""
         irc.reply(self.played(msg,False,query))
     lastplayed = wrap(lastplayed, ["text"])
     #}}}
