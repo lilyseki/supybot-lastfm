@@ -56,4 +56,7 @@ conf.registerChannelValue(LastFM, 'showtrackInfo',
 
 conf.registerChannelValue(LastFM, 'showTags', 
         registry.Boolean(True, """Determins whether artist tags are shown in np."""))
+
+conf.registerGlobalValue(LastFM, 'apiKey', registry.String('',
+    'LastFM API key', private=True))
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

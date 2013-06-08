@@ -57,7 +57,7 @@ class LastFM(callbacks.Plugin):
     # {{{ vars
     BASEURL = "http://ws.audioscrobbler.com/1.0/user"
     APIKEY = "" # FIXME: Get own key
-    APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
+    APIURL = ""
     # }}}
 
     # {{{ system functions
@@ -66,6 +66,8 @@ class LastFM(callbacks.Plugin):
         self.__parent.__init__(irc)
         self.db = LastFMDB(dbfilename)
         world.flushers.append(self.db.flush)
+        self.APIKEY = self.registryValue("apiKey")
+        self.APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % self.APIKEY
 
     def die(self):
         if self.db.flush in world.flushers:
