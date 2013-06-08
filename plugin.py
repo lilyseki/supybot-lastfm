@@ -56,7 +56,7 @@ from LastFMDB import *
 class LastFM(callbacks.Plugin):
     # {{{ vars
     BASEURL = "http://ws.audioscrobbler.com/1.0/user"
-    APIKEY = "7f11b8c4505415d7b9059339b47812d5" # FIXME: Get own key
+    APIKEY = "" # FIXME: Get own key
     APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
     # }}}
 
