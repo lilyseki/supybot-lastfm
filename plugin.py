@@ -56,7 +56,7 @@ from LastFMDB import *
 class LastFM(callbacks.Plugin):
     # {{{ vars
     BASEURL = "http://ws.audioscrobbler.com/1.0/user"
-    APIKEY = "" # FIXME: Get own key
+    APIKEY = "7f11b8c4505415d7b9059339b47812d5" # FIXME: Get own key
     APIURL = "http://ws.audioscrobbler.com/2.0/?api_key=%s&" % APIKEY
     # }}}
 
@@ -132,7 +132,11 @@ class LastFM(callbacks.Plugin):
             irc.error("Unknown ID (%s)! Also, \"%s\"" % (id,e))
             return
 
-        xml = minidom.parse(f).getElementsByTagName("recenttracks")[0]
+        try:
+            xml = minidom.parse(f).getElementsByTagName("recenttracks")[0]
+        except IndexError:
+            irc.error("Something broke, or you ain't listened to any tracks lol.")
+            return
         user = xml.getAttribute("user")
         try:
             t = xml.getElementsByTagName("track")[0] # most recent track
@@ -158,7 +162,7 @@ class LastFM(callbacks.Plugin):
             playcount = playinfo.getElementsByTagName("playcount")[0].firstChild.data
             listenercount = playinfo.getElementsByTagName("listeners")[0].firstChild.data
             userloved = playinfo.getElementsByTagName("userloved")[0].firstChild.data
-        except (IndexError, HTTPError):
+        except (IndexError, urllib2.HTTPError):
             trackInfo = False
 
         try:
@@ -168,8 +172,16 @@ class LastFM(callbacks.Plugin):
 
         # tags
         tags = []
-        thetags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
-        toptags = minidom.parse(thetags).getElementsByTagName("toptags")[0]
+        #if album != "":
+            #thetags = urllib2.urlopen("%s&method=album.getTopTags&artist=%s&album=%s&autocorrect=1"
+                    #% ( self.APIURL,artist2,urllib.quote_plus(t.getElementsByTagName("album")[0].firstChild.data)))
+        #else:
+        if True:
+            try:
+                thetags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
+                toptags = minidom.parse(thetags).getElementsByTagName("toptags")[0]
+            except IndexError: 
+                toptags = []
         for item in range(3):
             try:
                 tags.append(toptags.getElementsByTagName("tag")[item].getElementsByTagName("name")[0].firstChild.data)
@@ -497,14 +509,34 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
     # {{{ plays
     def plays(self, irc, msg, args, query):
-        """<query>
+        """[-user <user>] <query>
 
-        Displays user plays for artist <query>.
+        Displays <user> or self plays for artist <query>.
         """
 
-        id = (self.db.getId(msg.nick) or msg.nick)
         channel = msg.args[0]
         showColours = self.registryValue("showColours", channel)
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+
+        specificUser = True
+        theList = query.split(' ')
+        try:
+            userIndex = theList.index('-user')
+        except ValueError:
+            specificUser = False
+
+        if specificUser:
+            try:
+                user = theList[userIndex+1]
+            except IndexError:
+                irc.error("you have to put user after -user, dummy")
+                return
+            id = (self.db.getId(user) or user)
+            band = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
+            query = ' '.join(band)
+            
+
         artist = urllib.quote_plus(query)
         userPlayed = True
 
@@ -592,15 +624,35 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
     #}}}
 
     #{{{ top artists
-    def topartists(self, irc, msg, args, period, userid):
-        """[<period>] [<id>]
+    def topartists(self, irc, msg, args, period):
+        """[-user <user>] [<period>]
 
-        Show <id>'s or saved user's top artists from period (7d,1m,3m,6m,12m,o)"""
+        Show <user>'s or saved user's top artists from <period> (7d,1m,3m,6m,12m,o)"""
         channel = msg.args[0]
         showColours = self.registryValue("showColours",channel)
         numArtists = 10
-        noId = True
-        timeperiod = ""
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+
+        specificUser = True
+        if period:
+            theList = period.split(' ')
+            try:
+                userIndex = theList.index('-user')
+            except ValueError:
+                specificUser = False
+
+            if specificUser:
+                try:
+                    user = theList[userIndex+1]
+                except IndexError:
+                    return("Error: you have to put user after -user, dummy")
+                id = (self.db.getId(user) or user)
+                timePeriod = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
+                period = ' '.join(timePeriod)
+
+        #noId = True
+        #timeperiod = ""
 
         # python needs switch statements
         # this whole code is also pretty gross, eh?
@@ -624,14 +676,14 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             period = "overall"
             timeperiod = "overall"
         else:
-            id = period
+            #id = period
             period = "overall"
-            noId = False
-        if noId:
-            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
-        else:
-            #id = (self.db.getId(id) or id)
-            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            #noId = False
+        #if noId:
+            #id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        #else:
+            ##id = (self.db.getId(id) or id)
+            #id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
             timeperiod = "overall"
 
         try:
@@ -675,25 +727,48 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         
         irc.reply(output)
 
-    topartists = wrap(topartists, [optional("something"), optional("something")])
+    topartists = wrap(topartists, [optional('text')])
 
     #}}}
 
     #{{{ top albums
-    def topalbums(self, irc, msg, args, period, userid):
-        """[<period>] [<id>]
+    def topalbums(self, irc, msg, args, period):
+        """[-user <user>] [<period>]
 
-        Show <id>'s or saved user's top albums from period (7d,1m,3m,6m,12m,o)"""
+        Show <user>'s or saved user's top albums from <period> (7d,1m,3m,6m,12m,o)"""
         channel = msg.args[0]
         showColours = self.registryValue("showColours",channel)
-        numAlbums = 7
-        noId = True
-        timeperiod = ""
+        numAlbums = 10
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+
+        specificUser = True
+        if period:
+            theList = period.split(' ')
+            try:
+                userIndex = theList.index('-user')
+            except ValueError:
+                specificUser = False
+
+            if specificUser:
+                try:
+                    user = theList[userIndex+1]
+                except IndexError:
+                    return("Error: you have to put user after -user, dummy")
+                id = (self.db.getId(user) or user)
+                timePeriod = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
+                period = ' '.join(timePeriod)
+
+        #noId = True
+        #timeperiod = ""
 
         # python needs switch statements
         # this whole code is also pretty gross, eh?
         # I'm terrible at python 8)
-        # I also just copy/pasted from top artists
+        # I should probably put all this shit in a function instead of
+        # copy/paste
+        # but I am too lazy
+        # oh well
         if period == "7d":
             period = "7day"
             timeperiod = "seven days"
@@ -713,14 +788,14 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             period = "overall"
             timeperiod = "overall"
         else:
-            id = period
+            #id = period
             period = "overall"
-            noId = False
-        if noId:
-            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
-        else:
-            #id = (self.db.getId(id) or id)
-            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            #noId = False
+        #if noId:
+            #id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        #else:
+            ##id = (self.db.getId(id) or id)
+            #id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
             timeperiod = "overall"
 
         try:
@@ -766,25 +841,48 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         
         irc.reply(output)
 
-    topalbums = wrap(topalbums, [optional("something"), optional("something")])
+    topalbums = wrap(topalbums, [optional('text')])
 
     #}}}
 
     #{{{ top tracks
-    def toptracks(self, irc, msg, args, period, userid):
-        """[<period>] [<id>]
+    def toptracks(self, irc, msg, args, period):
+        """[-user <user>] [<period>]
 
-        Show <id>'s or saved user's top tracks from period (7d,1m,3m,6m,12m,o)"""
+        Show <user>'s or saved user's top tracks from <period> (7d,1m,3m,6m,12m,o)"""
         channel = msg.args[0]
         showColours = self.registryValue("showColours",channel)
-        numTracks = 7
-        noId = True
-        timeperiod = ""
+        numTracks = 10
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+
+        specificUser = True
+        if period:
+            theList = period.split(' ')
+            try:
+                userIndex = theList.index('-user')
+            except ValueError:
+                specificUser = False
+
+            if specificUser:
+                try:
+                    user = theList[userIndex+1]
+                except IndexError:
+                    return("Error: you have to put user after -user, dummy")
+                id = (self.db.getId(user) or user)
+                timePeriod = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
+                period = ' '.join(timePeriod)
+
+        #noId = True
+        #timeperiod = ""
 
         # python needs switch statements
         # this whole code is also pretty gross, eh?
         # I'm terrible at python 8)
-        # I also just copy/pasted from top artists
+        # I should probably put all this shit in a function instead of
+        # copy/paste
+        # but I am too lazy
+        # oh well
         if period == "7d":
             period = "7day"
             timeperiod = "seven days"
@@ -804,14 +902,14 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             period = "overall"
             timeperiod = "overall"
         else:
-            id = period
+            #id = period
             period = "overall"
-            noId = False
-        if noId:
-            id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
-        else:
-            #id = (self.db.getId(id) or id)
-            id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
+            #noId = False
+        #if noId:
+            #id = (self.db.getId(userid) or userid or self.db.getId(msg.nick) or msg.nick)
+        #else:
+            ##id = (self.db.getId(id) or id)
+            #id = (self.db.getId(id) or id or self.db.getId(msg.nick) or msg.nick)
             timeperiod = "overall"
 
         try:
@@ -857,15 +955,33 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         
         irc.reply(output)
 
-    toptracks = wrap(toptracks, [optional("something"), optional("something")])
+    toptracks = wrap(toptracks, [optional('text')])
 
     #}}}
 
     #{{{ first/last played
     def played(self, msg, first, query):
         channel = msg.args[0]
-        id = (self.db.getId(msg.nick) or msg.nick)
         showColours = self.registryValue("showColours", channel)
+
+        id = (self.db.getId(msg.nick) or msg.nick)
+
+        specificUser = True
+        theList = query.split(' ')
+        try:
+            userIndex = theList.index('-user')
+        except ValueError:
+            specificUser = False
+
+        if specificUser:
+            try:
+                user = theList[userIndex+1]
+            except IndexError:
+                return("Error: you have to put user after -user, dummy")
+            id = (self.db.getId(user) or user)
+            band = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
+            query = ' '.join(band)
+
         artist = urllib.quote_plus(query)
         
         try:
