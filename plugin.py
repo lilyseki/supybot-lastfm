@@ -31,7 +31,7 @@
 # }}}
 
 ### {{{ imports
-import sys
+from sys import stderr
 import supybot.utils as utils
 from supybot.commands import *
 import supybot.conf as conf
@@ -41,12 +41,12 @@ import supybot.ircmsgs as ircmsgs
 import supybot.callbacks as callbacks
 import supybot.world as world
 
-import re
 
-import urllib2
-#from urllib import quote_plus
+from re import sub
+from urllib2 import urlopen,HTTPError
+from httplib import BadStatusLine
+from urllib import quote_plus
 from xml.dom import minidom
-import urllib
 from time import time
 from BeautifulSoup import BeautifulSoup
 
@@ -93,8 +93,8 @@ class LastFM(callbacks.Plugin):
         method = method.lower()
 
         try:
-            f = urllib2.urlopen("%s/%s/%s.txt" % (self.BASEURL, id, method))
-        except urllib2.HTTPError:
+            f = urlopen("%s/%s/%s.txt" % (self.BASEURL, id, method))
+        except HTTPError:
             irc.error("Unknown ID (%s) or unknown method (%s)"
                     % (msg.nick, method))
             return
@@ -120,17 +120,17 @@ class LastFM(callbacks.Plugin):
         """
 
         id = (self.db.getId(optionalId) or optionalId or self.db.getId(msg.nick) or msg.nick)
-        if msg.nick.startswith("stoic") and not self.db.getId(msg.nick):
-            id = "pentax_"
         channel = msg.args[0]
         showColours = self.registryValue("showColours", channel)
         trackInfo = self.registryValue("showTrackInfo", channel)
         showTags = self.registryValue("showTags", channel)
 
+        getYear = True
+
         try:
-            f = urllib2.urlopen("%s&method=user.getrecenttracks&user=%s"
+            f = urlopen("%s&method=user.getrecenttracks&user=%s"
                     % (self.APIURL, id))
-        except urllib2.HTTPError,e:
+        except (HTTPError) as e:
             irc.error("Unknown ID (%s)! Also, \"%s\"" % (id,e))
             return
 
@@ -149,22 +149,24 @@ class LastFM(callbacks.Plugin):
         artist = t.getElementsByTagName("artist")[0].firstChild.data
         track = t.getElementsByTagName("name")[0].firstChild.data
         try:
-            album = " ["+t.getElementsByTagName("album")[0].firstChild.data+"]"
+            theAlbum = t.getElementsByTagName("album")[0].firstChild.data
+            album = u" [{0}]".format(theAlbum)
         except AttributeError:
             album = ""
+            getYear = False
 
-        artist2 = urllib.quote_plus(artist.encode("utf8"))
-        track2 = urllib.quote_plus(track.encode("utf8"))
+        artist2 = quote_plus(artist.encode("utf8"))
+        track2 = quote_plus(track.encode("utf8"))
 
         # Play count and shit
         try:
-            herp = urllib2.urlopen("%s&method=track.getInfo&username=%s&artist=%s&track=%s"
+            herp = urlopen("%s&method=track.getInfo&username=%s&artist=%s&track=%s"
                     % (self.APIURL, id, artist2, track2))
             playinfo = minidom.parse(herp).getElementsByTagName("track")[0]
             playcount = playinfo.getElementsByTagName("playcount")[0].firstChild.data
             listenercount = playinfo.getElementsByTagName("listeners")[0].firstChild.data
             userloved = playinfo.getElementsByTagName("userloved")[0].firstChild.data
-        except (IndexError, urllib2.HTTPError):
+        except (IndexError, HTTPError,AttributeError):
             trackInfo = False
 
         try:
@@ -172,15 +174,25 @@ class LastFM(callbacks.Plugin):
         except IndexError:
             userplaycount = 0
 
+        if getYear:
+            try:
+                albuminfox = urlopen(u"{0}&method=album.getinfo&artist={1}&album={2}".format(self.APIURL, artist2, theAlbum))
+                albuminfo = minidom.parse(albuminfox).getElementsByTagName("album")[0]
+                releasedate = albuminfo.getElementsByTagName("releasedate")[0].firstChild.data
+                releasedate = releasedate.split(' ')[6].split(',')[0]
+                album = " [{0} ~{1}~]".format(theAlbum,releasedate)
+            except (IndexError, HTTPError,BadStatusLine,UnicodeEncodeError):
+                releasedate = ""
+
         # tags
         tags = []
         #if album != "":
-            #thetags = urllib2.urlopen("%s&method=album.getTopTags&artist=%s&album=%s&autocorrect=1"
-                    #% ( self.APIURL,artist2,urllib.quote_plus(t.getElementsByTagName("album")[0].firstChild.data)))
+            #thetags = urlopen("%s&method=album.getTopTags&artist=%s&album=%s&autocorrect=1"
+                    #% ( self.APIURL,artist2,quote_plus(t.getElementsByTagName("album")[0].firstChild.data)))
         #else:
         if True:
             try:
-                thetags = urllib2.urlopen("%s&method=artist.getTopTags&artist=%s" % (self.APIURL,artist2))
+                thetags = urlopen("{0}&method=artist.getTopTags&artist={1}".format(self.APIURL,artist2))
                 toptags = minidom.parse(thetags).getElementsByTagName("toptags")[0]
             except IndexError: 
                 toptags = []
@@ -266,11 +278,12 @@ class LastFM(callbacks.Plugin):
         or specify <id> to switch for one call.
         """
 
-        id = (optionalId or self.db.getId(msg.nick) or msg.nick)
+        #id = (optionalId or self.db.getId(msg.nick) or msg.nick)
+        id = (self.db.getId(optionalId) or optionalId or self.db.getId(msg.nick) or msg.nick)
 
         try:
-            f = urllib2.urlopen("%s/%s/profile.xml" % (self.BASEURL, id))
-        except urllib2.HTTPError:
+            f = urlopen("%s/%s/profile.xml" % (self.BASEURL, id))
+        except HTTPError:
             irc.error("Unknown user (%s)" % id)
             return
 
@@ -299,11 +312,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         id1 = (self.db.getId(id1) or id1)
 
         try:
-            f = urllib2.urlopen("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
-        except urllib2.HTTPError:
+            f = urlopen("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
+        except HTTPError:
             irc.error("Unknown ID (%s or %s)" % (id1, id2))
             #self.info.log("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
-            #sys.stderr.write("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
+            #stderr.write("%s&method=tasteometer.compare&type1=user&type2=user&value1=%s&value2=%s" % (self.APIURL, id1, id2))
             return
 
         xml = minidom.parse(f).getElementsByTagName("comparison")[0]
@@ -341,24 +354,28 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         id = (self.db.getId(msg.nick) or msg.nick)
         channel = msg.args[0]
         showColours = self.registryValue("showColours", channel)
-        artist = urllib.quote_plus(query)
+        artist = quote_plus(query)
         isTagged = True
         placeAndDates = True
         userPlayed = True
 
         try:
-            f = urllib2.urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
+            f = urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
                     % (self.APIURL, artist, id))
-        except urllib2.HTTPError:
+        except HTTPError:
             irc.error("Unknown artist %s or something lol" % artist)
             return
         
-        xml = minidom.parse(f).getElementsByTagName("artist")[0]
-        name = xml.getElementsByTagName("name")[0].firstChild.data
-        url = xml.getElementsByTagName("url")[0].firstChild.data
-        listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
-        playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
-        bio = xml.getElementsByTagName("bio")[0]
+        try:
+            xml = minidom.parse(f).getElementsByTagName("artist")[0]
+            name = xml.getElementsByTagName("name")[0].firstChild.data
+            url = xml.getElementsByTagName("url")[0].firstChild.data
+            listenercount = xml.getElementsByTagName("stats")[0].getElementsByTagName("listeners")[0].firstChild.data
+            playcount = xml.getElementsByTagName("stats")[0].getElementsByTagName("playcount")[0].firstChild.data
+            bio = xml.getElementsByTagName("bio")[0]
+        except AttributeError:
+            irc.error("Last.fm is probably borkne, try again later!")
+            return
 
         try:
             userplaycount = xml.getElementsByTagName("userplaycount")[0].firstChild.data
@@ -379,11 +396,16 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             placeAndDates = False
         
         tags = []
-        toptags = xml.getElementsByTagName("tags")[0]
+        try:
+            toptags = xml.getElementsByTagName("tags")[0]
+        except IndexError:
+            toptags = ""
+            isTagged = False
+
         for item in range(3):
             try:
                 tags.append(toptags.getElementsByTagName("tag")[item].getElementsByTagName("name")[0].firstChild.data)
-            except IndexError:
+            except (IndexError,AttributeError), e:
                 break
         if len(tags) == 0:
             isTagged = False
@@ -432,17 +454,17 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
         channel = msg.args[0]
         showColours = self.registryValue("showColours", channel)
-        tag = urllib.quote_plus(query)
+        tag = quote_plus(query)
         summaryLength = 230
         numArtists = 5
         try:
-            f = urllib2.urlopen("%s&method=tag.getInfo&tag=%s" % (self.APIURL, tag))
-            j = urllib2.urlopen("%s&method=tag.getTopArtists&tag=%s&limit=%s" 
+            f = urlopen("%s&method=tag.getInfo&tag=%s" % (self.APIURL, tag))
+            j = urlopen("%s&method=tag.getTopArtists&tag=%s&limit=%s" 
                     % (self.APIURL, tag, numArtists))
-        except urllib2.HTTPError:
+        except HTTPError:
             irc.error("Unknown tag %s or something lol" % tag)
             return
-        except urllib2.URLError:
+        except URLError:
             irc.error("Time out lol")
             return
 
@@ -463,8 +485,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         if summary != None and summary != "":
             summary = str(BeautifulSoup(summary, convertEntities=BeautifulSoup.HTML_ENTITIES))
             # I janked these lines from BTN's DeepThroat's lastfm plugin
-            summary = re.sub("\<[^<]+\>", "", summary)
-            summary = re.sub("\s+", " ", summary)
+            summary = sub("\<[^<]+\>", "", summary)
+            summary = sub("\s+", " ", summary)
             summary = summary[:summaryLength] + "..." if (summary[:summaryLength] != summary) else summary
             summary += " "
             summary = unicode(summary, errors='ignore')
@@ -539,13 +561,13 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             query = ' '.join(band)
             
 
-        artist = urllib.quote_plus(query)
+        artist = quote_plus(query)
         userPlayed = True
 
         try:
-            f = urllib2.urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
+            f = urlopen("%s&method=artist.getInfo&autocorrect=1&artist=%s&username=%s"
                     % (self.APIURL, artist, id))
-        except urllib2.HTTPError:
+        except HTTPError:
             irc.error("Unknown artist %s or something lol" % artist)
             return
         
@@ -588,13 +610,13 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
 
         channel = msg.args[0]
         showColours = self.registryValue("showColours",channel)
-        artist = urllib.quote_plus(query)
+        artist = quote_plus(query)
         limit = 5
 
         try:
-            f = urllib2.urlopen("%s&method=artist.getSimilar&autocorrect=1&artist=%s&limit=%s"
+            f = urlopen("%s&method=artist.getSimilar&autocorrect=1&artist=%s&limit=%s"
                     % (self.APIURL, artist, limit))
-        except urllib2.HTTPError:
+        except HTTPError:
             irc.error("Unknown artist %s or something lol" % artist)
             return
         
@@ -674,6 +696,9 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         elif period == "12m":
             period = "12month"
             timeperiod = "twelve months"
+        elif period == "1y":
+            period = "12month"
+            timeperiod = "twelve months"
         elif period == "o":
             period = "overall"
             timeperiod = "overall"
@@ -689,8 +714,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             timeperiod = "overall"
 
         try:
-            f = urllib2.urlopen("%s&method=user.getTopArtists&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numArtists))
-        except urllib2.HTTPError:
+            f = urlopen("%s&method=user.getTopArtists&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numArtists))
+        except HTTPError:
             irc.error("Unknown ID %s or bad period %s" % (id, period))
             return
         xml = minidom.parse(f).getElementsByTagName("topartists")[0]
@@ -801,8 +826,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             timeperiod = "overall"
 
         try:
-            f = urllib2.urlopen("%s&method=user.getTopAlbums&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numAlbums))
-        except urllib2.HTTPError:
+            f = urlopen("%s&method=user.getTopAlbums&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numAlbums))
+        except HTTPError:
             irc.error("Unknown ID %s or bad period %s" % (id, period))
             return
         xml = minidom.parse(f).getElementsByTagName("topalbums")[0]
@@ -915,8 +940,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             timeperiod = "overall"
 
         try:
-            f = urllib2.urlopen("%s&method=user.getTopTracks&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numTracks))
-        except urllib2.HTTPError:
+            f = urlopen("%s&method=user.getTopTracks&user=%s&period=%s&limit=%s" % (self.APIURL, id, period, numTracks))
+        except HTTPError:
             irc.error("Unknown ID %s or bad period %s" % (id, period))
             return
         xml = minidom.parse(f).getElementsByTagName("toptracks")[0]
@@ -984,11 +1009,11 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
             band = theList[:theList.index("-user")] + theList[theList.index("-user")+2:]
             query = ' '.join(band)
 
-        artist = urllib.quote_plus(query)
+        artist = quote_plus(query)
         
         try:
-            f = urllib2.urlopen("%s&method=user.getArtistTracks&artist=%s&user=%s" % (self.APIURL, artist, id))
-        except urllib2.HTTPError,e:
+            f = urlopen("%s&method=user.getArtistTracks&artist=%s&user=%s" % (self.APIURL, artist, id))
+        except HTTPError,e:
             return ("Unknown user %s or artist %s, or maybe %s!" % (id,artist,e))
         xml = minidom.parse(f).getElementsByTagName("artisttracks")[0]
         user = xml.getAttribute("user")
@@ -996,8 +1021,8 @@ Country: %s; Tracks played: %s" % ((id,) + profile)).encode("utf8"))
         if first:
             pages = xml.getAttribute("totalPages")
             try:
-                j = urllib2.urlopen("%s&method=user.getArtistTracks&artist=%s&user=%s&page=%s" % (self.APIURL, artist, id, pages))
-            except urllib2.HTTPError,e:
+                j = urlopen("%s&method=user.getArtistTracks&artist=%s&user=%s&page=%s" % (self.APIURL, artist, id, pages))
+            except HTTPError,e:
                 return ("%s broke shit, m8." % e)
             lastpage = minidom.parse(j).getElementsByTagName("artisttracks")[0]
             try:
